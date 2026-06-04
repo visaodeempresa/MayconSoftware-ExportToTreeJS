@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="MayconSoftware-ExportToTreeJS" default="build" basedir=".">
+
+  <description>
+    Builds the MayconSoftware Export to Three.js plugin for SweetHome3D.
+    Output: dist/MayconSoftware-ExportToTreeJS.sh3p
+  </description>
+
+  <!-- ── properties ─────────────────────────────────────────── -->
+  <property name="src.dir"     value="src"/>
+  <property name="build.dir"   value="build"/>
+  <property name="dist.dir"    value="dist"/>
+  <property name="lib.dir"     value="lib"/>
+  <property name="plugin.jar"  value="${dist.dir}/MayconSoftware-ExportToTreeJS.sh3p"/>
+
+  <!-- ── classpath ──────────────────────────────────────────── -->
+  <path id="compile.classpath">
+    <fileset dir="${lib.dir}">
+      <include name="*.jar"/>
+    </fileset>
+  </path>
+
+  <!-- ── clean ──────────────────────────────────────────────── -->
+  <target name="clean" description="Remove build artifacts">
+    <delete dir="${build.dir}"/>
+    <delete dir="${dist.dir}"/>
+  </target>
+
+  <!-- ── compile ────────────────────────────────────────────── -->
+  <target name="compile" description="Compile Java sources">
+    <mkdir dir="${build.dir}"/>
+    <javac srcdir="${src.dir}"
+           destdir="${build.dir}"
+           classpathref="compile.classpath"
+           source="1.8"
+           target="1.8"
+           encoding="UTF-8"
+           includeantruntime="false"
+           debug="true">
+      <compilerarg value="-Xlint:unchecked"/>
+    </javac>
+
+    <!-- Copy .properties files next to compiled classes -->
+    <copy todir="${build.dir}">
+      <fileset dir="${src.dir}">
+        <include name="**/*.properties"/>
+      </fileset>
+    </copy>
+  </target>
+
+  <!-- ── package (.sh3p) ────────────────────────────────────── -->
+  <target name="package" depends="compile" description="Package the .sh3p plugin">
+    <mkdir dir="${dist.dir}"/>
+    <jar destfile="${plugin.jar}">
+      <!-- Plugin descriptor at JAR root -->
+      <fileset dir="${basedir}">
+        <include name="ApplicationPlugin.properties"/>
+      </fileset>
+      <!-- Compiled classes and resource properties -->
+      <fileset dir="${build.dir}">
+        <include name="**/*.class"/>
+        <include name="**/*.properties"/>
+      </fileset>
+    </jar>
+  </target>
+
+  <!-- ── build (default) ────────────────────────────────────── -->
+  <target name="build" depends="clean, package" description="Full clean build">
+    <echo message="Plugin built: ${plugin.jar}"/>
+  </target>
+
+</project>

@@ -1,0 +1,10 @@
+build/
+dist/
+lib/SweetHome3D.jar
+*.class
+.idea/
+*.iml
+.project
+.classpath
+.settings/
+.DS_Store
