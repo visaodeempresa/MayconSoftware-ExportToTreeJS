@@ -61,6 +61,10 @@
         <include name="**/*.class"/>
         <include name="**/*.properties"/>
       </fileset>
+      <!-- Template resource files for ZIP export -->
+      <fileset dir="${basedir}/resources">
+        <include name="template/**"/>
+      </fileset>
     </jar>
   </target>
 
