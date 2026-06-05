@@ -33,6 +33,7 @@ import java.util.zip.ZipOutputStream;
  *   SH3D y  → Three.js z  (south, no inversion)
  *   All values converted from cm to meters.
  *   Origin normalized to bounding box min.
+ *   Version 0.2.0
  */
 public class ExportToThreeJSAction extends PluginAction {
 
@@ -349,6 +350,8 @@ public class ExportToThreeJSAction extends PluginAction {
         sb.append("    wallThickness: ").append(fmtNum(defaultThicknessM)).append(",").append(nl);
         sb.append("    wallColor: 0xc8cad0,").append(nl);
         sb.append("    floorThickness: ").append(fmtNum(FLOOR_THICKNESS_M)).append(",").append(nl);
+        sb.append("    wallOpacity: 0.35,").append(nl);
+        sb.append("    floorOpacity: 0.65,").append(nl);
         sb.append("  },").append(nl);
 
         // ── rooms ──────────────────────────────────────────────────

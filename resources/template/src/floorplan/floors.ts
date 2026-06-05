@@ -11,8 +11,8 @@ export function buildFloors(plan: Floorplan) {
     roomGroup.name = `room:${room.id}`
 
     const floor = room.polygon
-      ? createPolygonFloor(room, plan.defaults.floorThickness)
-      : createRoomFloor(room, plan.defaults.floorThickness)
+      ? createPolygonFloor(room, plan)
+      : createRoomFloor(room, plan)
     roomGroup.add(floor)
 
     const outline = createOutline(floor)
@@ -73,7 +73,11 @@ export function buildFloors(plan: Floorplan) {
  * We rotate -90° around X to lay it flat in the XZ plane, then position
  * it at y=0 so the top surface is at y = thickness.
  */
-function createPolygonFloor(room: Room, thickness: number): THREE.Mesh {
+function createPolygonFloor(room: Room, plan: Floorplan): THREE.Mesh {
+  const thickness = plan.defaults.floorThickness
+  const opacity = plan.defaults.floorOpacity ?? 1.0
+  const isTransparent = opacity < 1.0
+
   const pts = room.polygon!
   const shape = new THREE.Shape()
   shape.moveTo(pts[0].x, pts[0].z)
@@ -91,6 +95,10 @@ function createPolygonFloor(room: Room, thickness: number): THREE.Mesh {
     color: room.floorColor,
     roughness: 0.95,
     metalness: 0.0,
+    transparent: isTransparent,
+    opacity,
+    side: isTransparent ? THREE.DoubleSide : THREE.FrontSide,
+    depthWrite: !isTransparent,
   })
 
   const mesh = new THREE.Mesh(geom, mat)
@@ -124,12 +132,20 @@ function computePolygonCentroid(polygon: Array<{ x: number; z: number }>, floorT
 /**
  * Creates a rectangular floor using BoxGeometry (fallback for rooms without polygon data).
  */
-function createRoomFloor(room: Room, thickness: number) {
+function createRoomFloor(room: Room, plan: Floorplan) {
+  const thickness = plan.defaults.floorThickness
+  const opacity = plan.defaults.floorOpacity ?? 1.0
+  const isTransparent = opacity < 1.0
+
   const geom = new THREE.BoxGeometry(room.size.x, thickness, room.size.z)
   const mat = new THREE.MeshStandardMaterial({
     color: room.floorColor,
     roughness: 0.95,
     metalness: 0.0,
+    transparent: isTransparent,
+    opacity,
+    side: isTransparent ? THREE.DoubleSide : THREE.FrontSide,
+    depthWrite: !isTransparent,
   })
   const mesh = new THREE.Mesh(geom, mat)
   mesh.receiveShadow = true

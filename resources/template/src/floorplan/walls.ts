@@ -5,14 +5,23 @@ export function buildWalls(plan: Floorplan) {
   const group = new THREE.Group()
   group.name = 'walls'
 
+  const opacity = plan.defaults.wallOpacity ?? 1.0
+  const isTransparent = opacity < 1.0
+
   const baseMat = new THREE.MeshStandardMaterial({
     color: plan.defaults.wallColor,
     roughness: 0.85,
     metalness: 0.0,
+    transparent: isTransparent,
+    opacity,
+    side: isTransparent ? THREE.DoubleSide : THREE.FrontSide,
+    depthWrite: !isTransparent,
   })
 
   for (const wall of plan.walls) {
-    const wallGroup = buildWall(wall, plan, baseMat)
+    const mat = wall.color != null ? baseMat.clone() : baseMat
+    if (wall.color != null) mat.color.set(wall.color)
+    const wallGroup = buildWall(wall, plan, mat)
     wallGroup.name = `wall:${wall.id}`
     group.add(wallGroup)
   }
