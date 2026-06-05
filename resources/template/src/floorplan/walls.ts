@@ -124,11 +124,13 @@ function buildWall(
       )
     }
 
-    // ── Glass pane for windows (openings with elevation > 0) ──
+    // ── Window leaves for windows (openings with elevation > 0) ──
     if (op.bottom > 1e-4 && right > left + 1e-4) {
       const windowHeight = op.top - op.bottom
       if (windowHeight > 1e-4) {
-        group.add(createGlassPane(from, dir, left, right, windowHeight, angleY, glassMaterial, op.bottom))
+        for (const leaf of createWindowLeaves(from, dir, left, right, windowHeight, angleY, glassMaterial, op.bottom)) {
+          group.add(leaf)
+        }
       }
     }
 
@@ -225,10 +227,11 @@ function createWallPiece(
 }
 
 /**
- * Creates a thin glass pane inside a window opening.
- * The pane is 6mm thick and positioned at the center of the wall.
+ * Creates two sliding window leaves (left + right).
+ * The left pane slides to the right, the right pane slides to the left,
+ * overlapping slightly in the center. Glass is 6mm thick.
  */
-function createGlassPane(
+function createWindowLeaves(
   origin: THREE.Vector3,
   dir: THREE.Vector3,
   a: number,
@@ -237,22 +240,44 @@ function createGlassPane(
   angleY: number,
   material: THREE.MeshStandardMaterial,
   yOffset: number,
-) {
-  const segLen = Math.max(b - a, 0)
+): THREE.Mesh[] {
+  const totalWidth = Math.max(b - a, 0)
+  const halfWidth = totalWidth / 2
   const glassThickness = 0.006 // 6mm
-  const geom = new THREE.BoxGeometry(segLen, height, glassThickness)
-  const mesh = new THREE.Mesh(geom, material)
-  mesh.userData.isGlass = true
+  const slideAmount = halfWidth * 0.35 // slide 35% of half-width toward center
 
-  const mid = (a + b) / 2
-  const center = new THREE.Vector3()
+  const meshes: THREE.Mesh[] = []
+  const wallNormal = new THREE.Vector3(-dir.z, 0, dir.x) // perpendicular to wall
+
+  // ── Left leaf: slides to the right ──
+  const leftGeom = new THREE.BoxGeometry(halfWidth, height, glassThickness)
+  const leftMesh = new THREE.Mesh(leftGeom, material)
+  leftMesh.userData.isGlass = true
+
+  const leftCenter = new THREE.Vector3()
     .copy(origin)
-    .addScaledVector(dir, mid)
+    .addScaledVector(dir, a + halfWidth / 2 + slideAmount)
+    .addScaledVector(wallNormal, glassThickness) // offset slightly forward
     .setY(yOffset + height / 2)
+  leftMesh.position.copy(leftCenter)
+  leftMesh.rotation.y = angleY
+  meshes.push(leftMesh)
 
-  mesh.position.copy(center)
-  mesh.rotation.y = angleY
-  return mesh
+  // ── Right leaf: slides to the left ──
+  const rightGeom = new THREE.BoxGeometry(halfWidth, height, glassThickness)
+  const rightMesh = new THREE.Mesh(rightGeom, material)
+  rightMesh.userData.isGlass = true
+
+  const rightCenter = new THREE.Vector3()
+    .copy(origin)
+    .addScaledVector(dir, a + halfWidth + halfWidth / 2 - slideAmount)
+    .addScaledVector(wallNormal, -glassThickness) // offset slightly backward
+    .setY(yOffset + height / 2)
+  rightMesh.position.copy(rightCenter)
+  rightMesh.rotation.y = angleY
+  meshes.push(rightMesh)
+
+  return meshes
 }
 
 /**
