@@ -253,7 +253,7 @@ function createWindow2Panes(
   const totalWidth = Math.max(b - a, 0)
   const halfWidth = totalWidth / 2
   const glassThickness = 0.006
-  const slideAmount = halfWidth * 0.35
+  const slideAmount = 0 // closed position
   const trackOffset = glassThickness * 2.5
 
   const meshes: THREE.Mesh[] = []
@@ -303,7 +303,7 @@ function createWindow4Panes(
   const totalWidth = Math.max(b - a, 0)
   const quarterWidth = totalWidth / 4
   const glassThickness = 0.006
-  const slideAmount = quarterWidth * 0.7
+  const slideAmount = 0 // closed position
   const trackOffset = glassThickness * 2.5
 
   const meshes: THREE.Mesh[] = []
