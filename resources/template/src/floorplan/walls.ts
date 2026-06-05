@@ -18,10 +18,33 @@ export function buildWalls(plan: Floorplan) {
     depthWrite: !isTransparent,
   })
 
+  const glassColor = plan.defaults.glassColor ?? 0x88ccee
+  const glassOpacity = plan.defaults.glassOpacity ?? 0.25
+  const glassMat = new THREE.MeshStandardMaterial({
+    color: glassColor,
+    transparent: true,
+    opacity: glassOpacity,
+    roughness: 0.05,
+    metalness: 0.1,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  })
+
+  const doorColor = plan.defaults.doorColor ?? 0x6b4226
+  const doorOpacity = plan.defaults.doorOpacity ?? 0.85
+  const doorMat = new THREE.MeshStandardMaterial({
+    color: doorColor,
+    roughness: 0.6,
+    metalness: 0.0,
+    transparent: doorOpacity < 1.0,
+    opacity: doorOpacity,
+    side: THREE.DoubleSide,
+  })
+
   for (const wall of plan.walls) {
     const mat = wall.color != null ? baseMat.clone() : baseMat
     if (wall.color != null) mat.color.set(wall.color)
-    const wallGroup = buildWall(wall, plan, mat)
+    const wallGroup = buildWall(wall, plan, mat, glassMat, doorMat)
     wallGroup.name = `wall:${wall.id}`
     group.add(wallGroup)
   }
@@ -52,7 +75,13 @@ function resolveOpenings(openings: WallOpening[]): ResolvedOpening[] {
   })
 }
 
-function buildWall(wall: Wall, plan: Floorplan, material: THREE.MeshStandardMaterial) {
+function buildWall(
+  wall: Wall,
+  plan: Floorplan,
+  material: THREE.MeshStandardMaterial,
+  glassMaterial: THREE.MeshStandardMaterial,
+  doorMaterial: THREE.MeshStandardMaterial,
+) {
   const group = new THREE.Group()
 
   const height = wall.height ?? plan.defaults.wallHeight
@@ -65,18 +94,11 @@ function buildWall(wall: Wall, plan: Floorplan, material: THREE.MeshStandardMate
   if (len < 1e-6) return group
   dir.normalize()
 
-  // Rotate the box so its local X-axis aligns with `dir`.
-  // Three.js Y-rotation: local X = (cos θ, 0, -sin θ).
-  // We need cos θ = dir.x, -sin θ = dir.z → θ = atan2(-dir.z, dir.x).
   const angleY = Math.atan2(-dir.z, dir.x)
 
   const rawOpenings = (wall.openings ?? []).filter((o) => o.width > 0 && o.height > 0)
   const openings = resolveOpenings(rawOpenings).sort((a, b) => a.offset - b.offset)
 
-  // For each opening, we need to:
-  // 1. Fill wall segments to the left/right of openings
-  // 2. Fill the lintel above doors (full height above door top)
-  // 3. Fill the sill below windows + lintel above windows
   let cursor = 0
   for (const op of openings) {
     const left = clamp(op.offset, 0, len)
@@ -102,6 +124,22 @@ function buildWall(wall: Wall, plan: Floorplan, material: THREE.MeshStandardMate
       )
     }
 
+    // ── Glass pane for windows (openings with elevation > 0) ──
+    if (op.bottom > 1e-4 && right > left + 1e-4) {
+      const windowHeight = op.top - op.bottom
+      if (windowHeight > 1e-4) {
+        group.add(createGlassPane(from, dir, left, right, windowHeight, angleY, glassMaterial, op.bottom))
+      }
+    }
+
+    // ── Door leaf for doors (openings at floor level) ──
+    if (op.bottom < 1e-4 && right > left + 1e-4) {
+      const doorHeight = op.top
+      if (doorHeight > 1e-4) {
+        group.add(createDoorLeaf(from, dir, left, right, doorHeight, thickness, angleY, doorMaterial))
+      }
+    }
+
     cursor = Math.max(cursor, right)
   }
 
@@ -110,13 +148,45 @@ function buildWall(wall: Wall, plan: Floorplan, material: THREE.MeshStandardMate
     group.add(createWallPiece(from, dir, cursor, len, height, thickness, angleY, material))
   }
 
-  // Outline edges for each mesh
-  for (const obj of group.children) {
-    if (!(obj instanceof THREE.Mesh)) continue
+  // Outline edges for wall meshes (skip glass panes and doors)
+  const wallMeshes = group.children.filter(
+    (obj): obj is THREE.Mesh => obj instanceof THREE.Mesh && !obj.userData.isGlass && !obj.userData.isDoor,
+  )
+  for (const obj of wallMeshes) {
     const edges = new THREE.EdgesGeometry(obj.geometry, 22)
     const line = new THREE.LineSegments(
       edges,
       new THREE.LineBasicMaterial({ color: 0x0a0e1a, transparent: true, opacity: 0.6 }),
+    )
+    line.position.copy(obj.position)
+    line.quaternion.copy(obj.quaternion)
+    group.add(line)
+  }
+
+  // Subtle outline for glass panes
+  const glassMeshes = group.children.filter(
+    (obj): obj is THREE.Mesh => obj instanceof THREE.Mesh && obj.userData.isGlass === true,
+  )
+  for (const obj of glassMeshes) {
+    const edges = new THREE.EdgesGeometry(obj.geometry, 10)
+    const line = new THREE.LineSegments(
+      edges,
+      new THREE.LineBasicMaterial({ color: 0x4499bb, transparent: true, opacity: 0.4 }),
+    )
+    line.position.copy(obj.position)
+    line.quaternion.copy(obj.quaternion)
+    group.add(line)
+  }
+
+  // Outline for door leaves
+  const doorMeshes = group.children.filter(
+    (obj): obj is THREE.Mesh => obj instanceof THREE.Mesh && obj.userData.isDoor === true,
+  )
+  for (const obj of doorMeshes) {
+    const edges = new THREE.EdgesGeometry(obj.geometry, 15)
+    const line = new THREE.LineSegments(
+      edges,
+      new THREE.LineBasicMaterial({ color: 0x3a2211, transparent: true, opacity: 0.5 }),
     )
     line.position.copy(obj.position)
     line.quaternion.copy(obj.quaternion)
@@ -151,6 +221,77 @@ function createWallPiece(
 
   mesh.position.copy(center)
   mesh.rotation.y = angleY
+  return mesh
+}
+
+/**
+ * Creates a thin glass pane inside a window opening.
+ * The pane is 6mm thick and positioned at the center of the wall.
+ */
+function createGlassPane(
+  origin: THREE.Vector3,
+  dir: THREE.Vector3,
+  a: number,
+  b: number,
+  height: number,
+  angleY: number,
+  material: THREE.MeshStandardMaterial,
+  yOffset: number,
+) {
+  const segLen = Math.max(b - a, 0)
+  const glassThickness = 0.006 // 6mm
+  const geom = new THREE.BoxGeometry(segLen, height, glassThickness)
+  const mesh = new THREE.Mesh(geom, material)
+  mesh.userData.isGlass = true
+
+  const mid = (a + b) / 2
+  const center = new THREE.Vector3()
+    .copy(origin)
+    .addScaledVector(dir, mid)
+    .setY(yOffset + height / 2)
+
+  mesh.position.copy(center)
+  mesh.rotation.y = angleY
+  return mesh
+}
+
+/**
+ * Creates a door leaf inside a door opening.
+ * The leaf is a thin panel (3cm) hinged on the left edge,
+ * rotated 30° inward to show the door is ajar.
+ */
+function createDoorLeaf(
+  origin: THREE.Vector3,
+  dir: THREE.Vector3,
+  a: number,
+  b: number,
+  height: number,
+  _wallThickness: number,
+  angleY: number,
+  material: THREE.MeshStandardMaterial,
+) {
+  const doorWidth = Math.max(b - a, 0)
+  const doorThickness = 0.03 // 3cm thick door
+  const swingAngle = Math.PI / 6 // 30° ajar
+
+  // Geometry centered at origin — we'll offset the pivot to the hinge edge
+  const geom = new THREE.BoxGeometry(doorWidth, height, doorThickness)
+  // Shift geometry so the left edge is at x=0 (hinge point)
+  geom.translate(doorWidth / 2, 0, 0)
+
+  const mesh = new THREE.Mesh(geom, material)
+  mesh.userData.isDoor = true
+  mesh.castShadow = true
+
+  // Position at the hinge point (left edge of the opening)
+  const hingePos = new THREE.Vector3()
+    .copy(origin)
+    .addScaledVector(dir, a)
+    .setY(height / 2)
+
+  mesh.position.copy(hingePos)
+  // Rotate to align with wall, then swing open
+  mesh.rotation.y = angleY - swingAngle
   return mesh
 }
 

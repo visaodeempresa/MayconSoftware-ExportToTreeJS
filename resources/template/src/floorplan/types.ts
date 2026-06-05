@@ -80,6 +80,26 @@ export type Floorplan = {
      * Defaults to 1.0 if omitted.
      */
     floorOpacity?: number
+    /**
+     * Glass color for window panes (hex number).
+     * Defaults to 0x88ccee (light blue) if omitted.
+     */
+    glassColor?: number
+    /**
+     * Glass opacity: 0.0 (invisible) to 1.0 (opaque).
+     * Defaults to 0.25 if omitted.
+     */
+    glassOpacity?: number
+    /**
+     * Door leaf color (hex number, e.g. 0x8b6914).
+     * Defaults to 0x6b4226 (dark wood) if omitted.
+     */
+    doorColor?: number
+    /**
+     * Door leaf opacity: 0.0 (invisible) to 1.0 (opaque).
+     * Defaults to 0.85 if omitted.
+     */
+    doorOpacity?: number
   }
   rooms: Room[]
   walls: Wall[]
