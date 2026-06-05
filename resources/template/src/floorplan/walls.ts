@@ -63,6 +63,8 @@ type ResolvedOpening = {
   bottom: number
   /** Top of the opening (distance from floor). */
   top: number
+  /** Number of glass panes for windows: 2 or 4. Undefined for doors. */
+  panes?: 2 | 4
 }
 
 function resolveOpenings(openings: WallOpening[]): ResolvedOpening[] {
@@ -71,7 +73,11 @@ function resolveOpenings(openings: WallOpening[]): ResolvedOpening[] {
       return { offset: o.offset, width: o.width, bottom: 0, top: o.height }
     }
     // window
-    return { offset: o.offset, width: o.width, bottom: o.elevation, top: o.elevation + o.height }
+    return {
+      offset: o.offset, width: o.width,
+      bottom: o.elevation, top: o.elevation + o.height,
+      panes: o.panes ?? 2,
+    }
   })
 }
 
@@ -128,9 +134,10 @@ function buildWall(
     if (op.bottom > 1e-4 && right > left + 1e-4) {
       const windowHeight = op.top - op.bottom
       if (windowHeight > 1e-4) {
-        for (const leaf of createWindowLeaves(from, dir, left, right, windowHeight, angleY, glassMaterial, op.bottom)) {
-          group.add(leaf)
-        }
+        const leaves = op.panes === 4
+          ? createWindow4Panes(from, dir, left, right, windowHeight, angleY, glassMaterial, op.bottom)
+          : createWindow2Panes(from, dir, left, right, windowHeight, angleY, glassMaterial, op.bottom)
+        for (const leaf of leaves) group.add(leaf)
       }
     }
 
@@ -227,15 +234,63 @@ function createWallPiece(
 }
 
 /**
+ * Creates a 2-pane sliding window (both panes mobile):
+ *   [ Abre←Esq | Abre→Dir ]
+ *
+ * Left pane slides left, right pane slides right.
+ * Each pane on a separate track for depth separation.
+ */
+function createWindow2Panes(
+  origin: THREE.Vector3,
+  dir: THREE.Vector3,
+  a: number,
+  b: number,
+  height: number,
+  angleY: number,
+  material: THREE.MeshStandardMaterial,
+  yOffset: number,
+): THREE.Mesh[] {
+  const totalWidth = Math.max(b - a, 0)
+  const halfWidth = totalWidth / 2
+  const glassThickness = 0.006
+  const slideAmount = halfWidth * 0.35
+  const trackOffset = glassThickness * 2.5
+
+  const meshes: THREE.Mesh[] = []
+  const wallNormal = new THREE.Vector3(-dir.z, 0, dir.x)
+
+  const createPane = (centerAlongWall: number, zOffset: number, paneWidth: number): THREE.Mesh => {
+    const geom = new THREE.BoxGeometry(paneWidth, height, glassThickness)
+    const mesh = new THREE.Mesh(geom, material)
+    mesh.userData.isGlass = true
+    const pos = new THREE.Vector3()
+      .copy(origin)
+      .addScaledVector(dir, centerAlongWall)
+      .addScaledVector(wallNormal, zOffset)
+      .setY(yOffset + height / 2)
+    mesh.position.copy(pos)
+    mesh.rotation.y = angleY
+    return mesh
+  }
+
+  // Left pane: slides left
+  meshes.push(createPane(a + halfWidth / 2 - slideAmount, 0, halfWidth))
+
+  // Right pane: slides right (on inner track)
+  meshes.push(createPane(a + halfWidth + halfWidth / 2 + slideAmount, trackOffset, halfWidth))
+
+  return meshes
+}
+
+/**
  * Creates a 4-pane sliding window:
  *   [ Fixed | Abre←Esq | Abre→Dir | Fixed ]
  *
  * The two outer panes (F) are fixed, flush with the wall plane.
  * The two inner panes (A) slide outward — left slides left, right slides right —
  * on a second track slightly offset from the wall.
- * Glass is 6mm thick.
  */
-function createWindowLeaves(
+function createWindow4Panes(
   origin: THREE.Vector3,
   dir: THREE.Vector3,
   a: number,
@@ -247,14 +302,13 @@ function createWindowLeaves(
 ): THREE.Mesh[] {
   const totalWidth = Math.max(b - a, 0)
   const quarterWidth = totalWidth / 4
-  const glassThickness = 0.006 // 6mm
-  const slideAmount = quarterWidth * 0.7 // 70% slide toward the fixed pane
-  const trackOffset = glassThickness * 2.5 // gap between tracks
+  const glassThickness = 0.006
+  const slideAmount = quarterWidth * 0.7
+  const trackOffset = glassThickness * 2.5
 
   const meshes: THREE.Mesh[] = []
   const wallNormal = new THREE.Vector3(-dir.z, 0, dir.x)
 
-  // Helper to create a glass pane
   const createPane = (centerAlongWall: number, zOffset: number): THREE.Mesh => {
     const geom = new THREE.BoxGeometry(quarterWidth, height, glassThickness)
     const mesh = new THREE.Mesh(geom, material)

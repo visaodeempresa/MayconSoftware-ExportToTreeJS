@@ -22,6 +22,12 @@ export type WindowOpening = {
    * Elevation from the floor (meters).
    */
   elevation: number
+  /**
+   * Number of glass panes: 2 (default) or 4.
+   *   2 = two sliding leaves (both mobile)
+   *   4 = two fixed outer + two sliding inner (janela de correr 4 folhas)
+   */
+  panes?: 2 | 4
 }
 
 export type WallOpening = DoorOpening | WindowOpening
